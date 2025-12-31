@@ -1,18 +1,26 @@
 package src;
 
 import src.backend.AllocationLogic;
+import src.dao.AllocationDAO;
 
 public class TestApp {
     public static void main(String[] args) {
-        System.out.println("=== Faculty Allocation Started ===");
-
-        AllocationLogic allocationLogic = new AllocationLogic();
-
-        // Allocate one semester at a time
-        allocationLogic.generateAllocation("3");
-        allocationLogic.generateAllocation("5");
-        allocationLogic.generateAllocation("7");
-
-        System.out.println("=== Allocation Finished ===");
+        try {
+            System.out.println("🔥 STARTING FACULTY ALLOCATION WITH PRIORITY RULES");
+            System.out.println("Rules: Assistants(2/day) > Associates(1/day) > Professors(emergency)");
+            
+            // Clear old data
+            AllocationDAO allocationDAO = new AllocationDAO();
+            allocationDAO.clearAllAllocations();
+            
+            // Generate with NEW priority rules
+            AllocationLogic logic = new AllocationLogic();
+            logic.generateAllocations();
+            
+            System.out.println("\n✅ ALLOCATION COMPLETE! Check FacultyPage now.");
+            
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 }

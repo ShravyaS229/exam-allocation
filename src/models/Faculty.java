@@ -1,31 +1,48 @@
 package src.models;
 
-import javafx.beans.property.*;
-
 public class Faculty {
-    private IntegerProperty facultyId;
-    private StringProperty name;
-    private StringProperty designation;
-    private BooleanProperty senior;
-    private BooleanProperty absent;
+    private int facultyId;
+    private String name;
+    private String designation;
+    private boolean isSenior;
+    private boolean isAbsent;
 
     public Faculty(int facultyId, String name, String designation, boolean isSenior, boolean isAbsent) {
-        this.facultyId = new SimpleIntegerProperty(facultyId);
-        this.name = new SimpleStringProperty(name);
-        this.designation = new SimpleStringProperty(designation);
-        this.senior = new SimpleBooleanProperty(isSenior);
-        this.absent = new SimpleBooleanProperty(isAbsent);
+        this.facultyId = facultyId;
+        this.name = name;
+        this.designation = designation;
+        this.isSenior = isSenior;
+        this.isAbsent = isAbsent;
     }
 
-    public int getFacultyId() { return facultyId.get(); }
-    public String getName() { return name.get(); }
-    public String getDesignation() { return designation.get(); }
-    public boolean isSenior() { return senior.get(); }
-    public boolean isAbsent() { return absent.get(); }
+    // CRITICAL: This fixes dropdown showing "Faculty@123abc"
+    @Override
+    public String toString() {
+        return name + " (" + designation + ")";
+    }
 
-    public IntegerProperty facultyIdProperty() { return facultyId; }
-    public StringProperty nameProperty() { return name; }
-    public StringProperty designationProperty() { return designation; }
-    public BooleanProperty seniorProperty() { return senior; }
-    public BooleanProperty absentProperty() { return absent; }
+    // All required getters
+    public int getFacultyId() {
+        return facultyId;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public String getDesignation() {
+        return designation;
+    }
+
+    public boolean isSenior() {
+        return isSenior;
+    }
+
+    public boolean isAbsent() {
+        return isAbsent;
+    }
+
+    public void setAbsent(boolean absent) {
+        this.isAbsent = absent;
+    }
 }

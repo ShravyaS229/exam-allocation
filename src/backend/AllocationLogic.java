@@ -1,98 +1,134 @@
 package src.backend;
 
 import src.dao.FacultyDAO;
-import src.dao.RoomDAO;
 import src.dao.SlotDAO;
+import src.dao.AllocationDAO;
 import src.dao.SubjectDAO;
 import src.models.Faculty;
-import src.models.Room;
 import src.models.Slot;
-import src.models.Subject;
-import src.DBConnection;
-
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.SQLException;
 import java.util.*;
 
 public class AllocationLogic {
-
     private FacultyDAO facultyDAO = new FacultyDAO();
-    private RoomDAO roomDAO = new RoomDAO();
     private SlotDAO slotDAO = new SlotDAO();
+    private AllocationDAO allocationDAO = new AllocationDAO();
     private SubjectDAO subjectDAO = new SubjectDAO();
 
-    public void generateAllocation(String semester) {
+    public void generateAllocations() {
+        System.out.println("=== FACULTY ALLOCATION WITH YOUR RULES ===");
+        System.out.println("RULES: Assistants(2 duties/day) > Associates(1 duty/day) > Professors/HOD(Emergency only)");
+        
+        allocationDAO.clearAllAllocations();
+        List<Slot> slots = slotDAO.getAllSlots();
         List<Faculty> faculties = facultyDAO.getAllFaculties();
-        List<Room> rooms = roomDAO.getAllRooms();
-        List<Slot> slots = slotDAO.getSlotsBySemester(semester);
-        List<Subject> subjects = subjectDAO.getSubjectsBySemester(semester);
-
-        if(subjects.isEmpty() || slots.isEmpty()) {
-            System.out.println("No slots or subjects available for semester " + semester);
-            return;
-        }
-
-        Map<String, Boolean> facultyAssigned = new HashMap<>();
-
-        for (Faculty f : faculties) {
-            facultyAssigned.put(f.getName(), false);
-        }
-
-        int roomIndex = 0;
-        int facultyIndex = 0;
-        int subjectIndex = 0;
-
-        try (Connection conn = DBConnection.getConnection()) {
-            String insertQuery = "INSERT INTO allocation_result (exam_date, time, room_no, semester, subject, faculty_name, designation) VALUES (?, ?, ?, ?, ?, ?, ?)";
-
-            for (Slot slot : slots) {
-                for (Room room : rooms) {
-                    if(subjectIndex >= subjects.size()) subjectIndex = 0;
-
-                    Subject subject = subjects.get(subjectIndex);
-
-                    // Find next available faculty
-                    Faculty assignedFaculty = null;
-                    for(int i=0; i<faculties.size(); i++){
-                        Faculty f = faculties.get(facultyIndex % faculties.size());
-                        facultyIndex++;
-                        if(!facultyAssigned.get(f.getName())) {
-                            assignedFaculty = f;
-                            facultyAssigned.put(f.getName(), true);
-                            break;
-                        }
-                    }
-
-                    if(assignedFaculty == null){
-                        System.out.println("Not enough faculties available for subject: " + subject.getName());
-                        continue;
-                    }
-
-                    // Insert allocation
-                    try (PreparedStatement ps = conn.prepareStatement(insertQuery)) {
-                        ps.setString(1, slot.getExamDate());
-                        ps.setString(2, slot.getTime());
-                        ps.setInt(3, room.getRoomNo());
-                        ps.setString(4, semester);
-                        ps.setString(5, subject.getName());
-                        ps.setString(6, assignedFaculty.getName());
-                        ps.setString(7, assignedFaculty.getDesignation());
-                        ps.executeUpdate();
-                    }
-
-                    subjectIndex++;
-                }
-
-                // Reset faculty availability for next slot
-                for (Faculty f : faculties) {
-                    facultyAssigned.put(f.getName(), false);
+        
+        // DUTY COUNTER: facultyName_date -> count
+        Map<String, Integer> dutyCount = new HashMap<>();
+        
+        for (Slot slot : slots) {
+            // 9 rooms per slot
+            for (int room = 101; room <= 109; room++) {
+                Faculty selectedFaculty = selectFacultyByPriority(slot, faculties, dutyCount);
+                
+                if (selectedFaculty != null) {
+                    // Get subject name using YOUR SubjectDAO method
+                    String subjectName = subjectDAO.getSubjectByCode(slot.getSubjectCode()).getSubjectName();
+                    
+                    // Save using YOUR AllocationDAO (String date)
+                    allocationDAO.saveAllocation(
+                        slot.getExamDate(),      // String from Slot
+                        slot.getTime(),
+                        room,
+                        slot.getSemester(),
+                        subjectName,
+                        selectedFaculty.getName(),
+                        selectedFaculty.getDesignation()
+                    );
+                    
+                    // Print with priority indicator
+                    String priority = getPriorityLabel(selectedFaculty);
+                    System.out.println(selectedFaculty.getName() + " (" + priority + 
+                                     ") → Room " + room + ", Sem " + slot.getSemester() + 
+                                     ", " + slot.getTime());
+                    
+                    // Update duty count for this faculty_date
+                    String dutyKey = selectedFaculty.getName() + "_" + slot.getExamDate();
+                    dutyCount.put(dutyKey, dutyCount.getOrDefault(dutyKey, 0) + 1);
+                } else {
+                    System.out.println("❌ No faculty available for " + slot.getExamDate() + " " + slot.getTime());
                 }
             }
-        } catch (SQLException e) {
-            e.printStackTrace();
         }
-
-        System.out.println("Allocation completed for semester " + semester);
+        System.out.println("\n✅ ALLOCATION COMPLETE - FacultyPage ready!");
+        System.out.println("Total allocations: " + (slots.size() * 9));
+    }
+    
+    private Faculty selectFacultyByPriority(Slot slot, List<Faculty> faculties, Map<String, Integer> dutyCount) {
+        Random rand = new Random();
+        String dateKey = slot.getExamDate();
+        
+        // CONDITION 1: Assistants first (MAX 2 duties per day)
+        List<Faculty> availableAssistants = new ArrayList<>();
+        for (Faculty f : faculties) {
+            if (f.getDesignation().toLowerCase().contains("assistant")) {
+                String dutyKey = f.getName() + "_" + dateKey;
+                int currentDuties = dutyCount.getOrDefault(dutyKey, 0);
+                if (currentDuties < 2) {
+                    availableAssistants.add(f);
+                }
+            }
+        }
+        if (!availableAssistants.isEmpty()) {
+            Faculty selected = availableAssistants.get(rand.nextInt(availableAssistants.size()));
+            System.out.println("   → Selected Assistant: " + selected.getName() + " (duties today: " + dutyCount.getOrDefault(selected.getName() + "_" + dateKey, 0) + "/2)");
+            return selected;
+        }
+        
+        // CONDITION 2: Associates next (MAX 1 duty per day)
+        List<Faculty> availableAssociates = new ArrayList<>();
+        for (Faculty f : faculties) {
+            if (f.getDesignation().toLowerCase().contains("associate")) {
+                String dutyKey = f.getName() + "_" + dateKey;
+                int currentDuties = dutyCount.getOrDefault(dutyKey, 0);
+                if (currentDuties < 1) {
+                    availableAssociates.add(f);
+                }
+            }
+        }
+        if (!availableAssociates.isEmpty()) {
+            Faculty selected = availableAssociates.get(rand.nextInt(availableAssociates.size()));
+            System.out.println("   → Selected Associate: " + selected.getName() + " (duties today: " + dutyCount.getOrDefault(selected.getName() + "_" + dateKey, 0) + "/1)");
+            return selected;
+        }
+        
+        // CONDITION 3: Professors/HOD - EMERGENCY ONLY (MAX 1 duty per day)
+        List<Faculty> availableSeniors = new ArrayList<>();
+        for (Faculty f : faculties) {
+            if (f.isSenior()) {
+                String dutyKey = f.getName() + "_" + dateKey;
+                int currentDuties = dutyCount.getOrDefault(dutyKey, 0);
+                if (currentDuties < 1) {
+                    availableSeniors.add(f);
+                }
+            }
+        }
+        if (!availableSeniors.isEmpty()) {
+            Faculty selected = availableSeniors.get(0); // HOD first
+            System.out.println("   → EMERGENCY Senior: " + selected.getName() + " (duties today: " + dutyCount.getOrDefault(selected.getName() + "_" + dateKey, 0) + "/1)");
+            return selected;
+        }
+        
+        // FINAL FALLBACK: Any faculty (no duty limit)
+        Collections.shuffle(faculties);
+        Faculty fallback = faculties.get(0);
+        System.out.println("   → FALLBACK: " + fallback.getName());
+        return fallback;
+    }
+    
+    private String getPriorityLabel(Faculty faculty) {
+        if (faculty.getDesignation().toLowerCase().contains("assistant")) return "ASST(2max)";
+        if (faculty.getDesignation().toLowerCase().contains("associate")) return "ASSOC(1max)";
+        if (faculty.isSenior()) return "PROF(EMRG)";
+        return "FALLBACK";
     }
 }

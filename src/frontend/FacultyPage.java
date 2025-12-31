@@ -2,75 +2,106 @@ package src.frontend;
 
 import javafx.application.Application;
 import javafx.collections.FXCollections;
+import javafx.geometry.Insets;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
+import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.*;
 import javafx.stage.Stage;
-import src.dao.AllocationDAO;
 import src.dao.FacultyDAO;
-import src.models.AllocationResult;
+import src.dao.AllocationDAO;
 import src.models.Faculty;
-
+import src.models.AllocationResult;
 import java.util.List;
 
 public class FacultyPage extends Application {
-
-    private TableView<AllocationResult> table = new TableView<>();
+    private TableView<AllocationResult> tableView = new TableView<>();
+    private ComboBox<Faculty> facultyComboBox = new ComboBox<>();
     private FacultyDAO facultyDAO = new FacultyDAO();
     private AllocationDAO allocationDAO = new AllocationDAO();
 
     @Override
-    public void start(Stage stage) {
+    public void start(Stage primaryStage) {
+        VBox root = new VBox(20);
+        root.setPadding(new Insets(20));
 
-        Label label = new Label("Faculty Allocation Page");
+        Label titleLabel = new Label("Faculty Allocation Viewer");
+        titleLabel.setStyle("-fx-font-size: 24px; -fx-font-weight: bold;");
 
-        // Dropdown to select faculty
-        ComboBox<Faculty> facultyCombo = new ComboBox<>();
-        List<Faculty> faculties = facultyDAO.getAllFaculties(); // matches your DAO
-        facultyCombo.setItems(FXCollections.observableArrayList(faculties));
+        HBox selectorBox = new HBox(15);
+        selectorBox.getChildren().addAll(
+            new Label("Select Faculty:"),
+            facultyComboBox,
+            createShowButton()
+        );
 
-        // ===== Table Columns =====
-        TableColumn<AllocationResult, Integer> roomCol = new TableColumn<>("Room No");
-        roomCol.setCellValueFactory(f -> new javafx.beans.property.ReadOnlyObjectWrapper<>(f.getValue().getRoomNo()));
+        setupTable();
+        loadFaculties();
 
-        TableColumn<AllocationResult, String> dateCol = new TableColumn<>("Exam Date");
-        dateCol.setCellValueFactory(f -> new javafx.beans.property.ReadOnlyStringWrapper(f.getValue().getExamDate()));
+        root.getChildren().addAll(titleLabel, selectorBox, tableView);
+
+        Scene scene = new Scene(root, 1000, 700);
+        primaryStage.setScene(scene);
+        primaryStage.setTitle("Faculty Allocation Viewer");
+        primaryStage.show();
+    }
+
+    private Button createShowButton() {
+        Button showButton = new Button("Show My Allocations");
+        showButton.setOnAction(e -> showSelectedFacultyAllocations());
+        return showButton;
+    }
+
+    private void setupTable() {
+        TableColumn<AllocationResult, String> dateCol = new TableColumn<>("Date");
+        dateCol.setCellValueFactory(new PropertyValueFactory<>("examDate"));
+        dateCol.setPrefWidth(120);
 
         TableColumn<AllocationResult, String> timeCol = new TableColumn<>("Time");
-        timeCol.setCellValueFactory(f -> new javafx.beans.property.ReadOnlyStringWrapper(f.getValue().getTime()));
+        timeCol.setCellValueFactory(new PropertyValueFactory<>("time"));
+        timeCol.setPrefWidth(120);
 
-        TableColumn<AllocationResult, String> semCol = new TableColumn<>("Semester");
-        semCol.setCellValueFactory(f -> new javafx.beans.property.ReadOnlyStringWrapper(f.getValue().getSemester()));
+        TableColumn<AllocationResult, String> semCol = new TableColumn<>("Sem");
+        semCol.setCellValueFactory(new PropertyValueFactory<>("semester"));
+        semCol.setPrefWidth(60);
 
-        TableColumn<AllocationResult, String> subCol = new TableColumn<>("Subject");
-        subCol.setCellValueFactory(f -> new javafx.beans.property.ReadOnlyStringWrapper(f.getValue().getSubject()));
+        TableColumn<AllocationResult, String> subjectCol = new TableColumn<>("Subject");
+        subjectCol.setCellValueFactory(new PropertyValueFactory<>("subject"));
+        subjectCol.setPrefWidth(350);
 
-        TableColumn<AllocationResult, String> facCol = new TableColumn<>("Faculty");
-        facCol.setCellValueFactory(f -> new javafx.beans.property.ReadOnlyStringWrapper(f.getValue().getFacultyName()));
+        TableColumn<AllocationResult, Integer> roomCol = new TableColumn<>("Room");
+        roomCol.setCellValueFactory(new PropertyValueFactory<>("roomNo"));
+        roomCol.setPrefWidth(80);
 
-        table.getColumns().addAll(roomCol, dateCol, timeCol, semCol, subCol, facCol);
+        tableView.getColumns().addAll(dateCol, timeCol, semCol, subjectCol, roomCol);
+    }
 
-        // ===== Button =====
-        Button showBtn = new Button("Show Allocation");
-        showBtn.setOnAction(e -> {
-            Faculty selected = facultyCombo.getSelectionModel().getSelectedItem();
-            if (selected != null) {
-                // Use the correct DAO method
-                List<AllocationResult> allocations = allocationDAO.getAllocationsForFaculty(selected.getName());
-                table.setItems(FXCollections.observableArrayList(allocations));
-            } else {
-                Alert alert = new Alert(Alert.AlertType.WARNING, "Please select a faculty first.");
-                alert.showAndWait();
-            }
-        });
+    private void loadFaculties() {
+        List<Faculty> faculties = facultyDAO.getAllFaculties();
+        facultyComboBox.setItems(FXCollections.observableArrayList(faculties));
+    }
 
-        VBox root = new VBox(10, label, facultyCombo, showBtn, table);
-        root.setPadding(new javafx.geometry.Insets(10));
+    private void showSelectedFacultyAllocations() {
+        Faculty selectedFaculty = facultyComboBox.getValue();
+        if (selectedFaculty == null) {
+            showAlert("Please select a faculty first!");
+            return;
+        }
 
-        Scene scene = new Scene(root, 800, 500);
-        stage.setScene(scene);
-        stage.setTitle("Faculty Allocation Page");
-        stage.show();
+        List<AllocationResult> allocations = allocationDAO.getAllocationsForFaculty(selectedFaculty.getName());
+        tableView.setItems(FXCollections.observableArrayList(allocations));
+
+        if (allocations.isEmpty()) {
+            showAlert("No allocations found for " + selectedFaculty.getName());
+        }
+    }
+
+    private void showAlert(String message) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("Info");
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.showAndWait();
     }
 
     public static void main(String[] args) {
