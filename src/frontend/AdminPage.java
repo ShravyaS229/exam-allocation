@@ -1,53 +1,57 @@
 package src.frontend;
 
-import javafx.application.Application;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
-import javafx.scene.layout.*;
+import javafx.scene.layout.GridPane;
 import javafx.stage.Stage;
-import src.dao.AllocationDAO;
 import src.backend.AllocationLogic;
 
-public class AdminPage extends Application {
-    
-    @Override
-    public void start(Stage primaryStage) {
-        VBox root = new VBox(20);
-        root.setPadding(new Insets(20));
+public class AdminPage {
 
-        Label titleLabel = new Label("Admin - Exam Allocation System");
-        titleLabel.setStyle("-fx-font-size: 24px; -fx-font-weight: bold;");
+    public void start(Stage stage) {
 
-        Button generateButton = new Button("Generate Allocations");
-        generateButton.setOnAction(e -> generateAllocations());
+        Label title = new Label("Admin Panel");
+        title.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
 
-        Button viewFacultyButton = new Button("View Faculty Page");
-        viewFacultyButton.setOnAction(e -> new FacultyPage().start(new Stage()));
+        Label semLabel = new Label("Select Semester:");
+        ComboBox<String> semesterBox = new ComboBox<>();
+        semesterBox.getItems().addAll("3", "5", "7");
 
-        root.getChildren().addAll(titleLabel, generateButton, viewFacultyButton);
+        Button allocateBtn = new Button("Generate Allocation");
+        Button exitBtn = new Button("Exit");
 
-        Scene scene = new Scene(root, 600, 400);
-        primaryStage.setScene(scene);
-        primaryStage.setTitle("Admin Page");
-        primaryStage.show();
-    }
+        Label status = new Label("");
 
-    private void generateAllocations() {
-        AllocationLogic logic = new AllocationLogic();
-        logic.generateAllocations();
-        showAlert("Allocations generated successfully!");
-    }
+        allocateBtn.setOnAction(e -> {
+            String semester = semesterBox.getValue();
+            if (semester == null) {
+                status.setText("Please select a semester.");
+                return;
+            }
 
-    private void showAlert(String message) {
-        Alert alert = new Alert(Alert.AlertType.INFORMATION);
-        alert.setTitle("Success");
-        alert.setHeaderText(null);
-        alert.setContentText(message);
-        alert.showAndWait();
-    }
+            AllocationLogic logic = new AllocationLogic();
+            logic.generateAllocation(semester);
 
-    public static void main(String[] args) {
-        launch(args);
+            status.setText("Allocation completed for Semester " + semester);
+        });
+
+        exitBtn.setOnAction(e -> stage.close());
+
+        GridPane grid = new GridPane();
+        grid.setPadding(new Insets(20));
+        grid.setVgap(15);
+        grid.setHgap(10);
+
+        grid.add(title, 0, 0, 2, 1);
+        grid.add(semLabel, 0, 1);
+        grid.add(semesterBox, 1, 1);
+        grid.add(allocateBtn, 0, 2);
+        grid.add(exitBtn, 1, 2);
+        grid.add(status, 0, 3, 2, 1);
+
+        stage.setTitle("Admin Page");
+        stage.setScene(new Scene(grid, 400, 250));
+        stage.show();
     }
 }

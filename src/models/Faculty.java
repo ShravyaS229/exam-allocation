@@ -4,45 +4,26 @@ public class Faculty {
     private int facultyId;
     private String name;
     private String designation;
-    private boolean isSenior;
-    private boolean isAbsent;
+    private boolean absent;
+    private boolean senior;
 
-    public Faculty(int facultyId, String name, String designation, boolean isSenior, boolean isAbsent) {
+    public Faculty(int facultyId, String name, String designation,
+                   boolean absent, boolean senior) {
         this.facultyId = facultyId;
         this.name = name;
         this.designation = designation;
-        this.isSenior = isSenior;
-        this.isAbsent = isAbsent;
+        this.absent = absent;
+        this.senior = senior;
     }
 
-    // CRITICAL: This fixes dropdown showing "Faculty@123abc"
+    public int getFacultyId() { return facultyId; }
+    public String getName() { return name; }
+    public String getDesignation() { return designation; }
+    public boolean isAbsent() { return absent; }
+    public boolean isSenior() { return senior; }
+
     @Override
     public String toString() {
-        return name + " (" + designation + ")";
-    }
-
-    // All required getters
-    public int getFacultyId() {
-        return facultyId;
-    }
-
-    public String getName() {
         return name;
-    }
-
-    public String getDesignation() {
-        return designation;
-    }
-
-    public boolean isSenior() {
-        return isSenior;
-    }
-
-    public boolean isAbsent() {
-        return isAbsent;
-    }
-
-    public void setAbsent(boolean absent) {
-        this.isAbsent = absent;
     }
 }

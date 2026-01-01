@@ -2,106 +2,126 @@ package src.frontend;
 
 import javafx.application.Application;
 import javafx.collections.FXCollections;
-import javafx.geometry.Insets;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
-import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.*;
 import javafx.stage.Stage;
-import src.dao.FacultyDAO;
 import src.dao.AllocationDAO;
-import src.models.Faculty;
+import src.dao.FacultyDAO;
 import src.models.AllocationResult;
-import java.util.List;
+import src.models.Faculty;
+
+import java.util.*;
 
 public class FacultyPage extends Application {
-    private TableView<AllocationResult> tableView = new TableView<>();
-    private ComboBox<Faculty> facultyComboBox = new ComboBox<>();
+
+    private TableView<AllocationResult> table = new TableView<>();
     private FacultyDAO facultyDAO = new FacultyDAO();
     private AllocationDAO allocationDAO = new AllocationDAO();
 
     @Override
-    public void start(Stage primaryStage) {
-        VBox root = new VBox(20);
-        root.setPadding(new Insets(20));
+    public void start(Stage stage) {
+        Label label = new Label("Faculty Allocation Page");
+        label.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
 
-        Label titleLabel = new Label("Faculty Allocation Viewer");
-        titleLabel.setStyle("-fx-font-size: 24px; -fx-font-weight: bold;");
+        // Dropdown to select faculty
+        ComboBox<Faculty> facultyCombo = new ComboBox<>();
+        List<Faculty> faculties = facultyDAO.getAllFaculties();
+        facultyCombo.setItems(FXCollections.observableArrayList(faculties));
 
-        HBox selectorBox = new HBox(15);
-        selectorBox.getChildren().addAll(
-            new Label("Select Faculty:"),
-            facultyComboBox,
-            createShowButton()
-        );
+        // ===== Table Columns =====
+        TableColumn<AllocationResult, Integer> roomCol = new TableColumn<>("Room No");
+        roomCol.setCellValueFactory(f -> new javafx.beans.property.ReadOnlyObjectWrapper<>(f.getValue().getRoomNo()));
+        roomCol.setPrefWidth(80);
 
-        setupTable();
-        loadFaculties();
-
-        root.getChildren().addAll(titleLabel, selectorBox, tableView);
-
-        Scene scene = new Scene(root, 1000, 700);
-        primaryStage.setScene(scene);
-        primaryStage.setTitle("Faculty Allocation Viewer");
-        primaryStage.show();
-    }
-
-    private Button createShowButton() {
-        Button showButton = new Button("Show My Allocations");
-        showButton.setOnAction(e -> showSelectedFacultyAllocations());
-        return showButton;
-    }
-
-    private void setupTable() {
-        TableColumn<AllocationResult, String> dateCol = new TableColumn<>("Date");
-        dateCol.setCellValueFactory(new PropertyValueFactory<>("examDate"));
+        TableColumn<AllocationResult, String> dateCol = new TableColumn<>("Exam Date");
+        dateCol.setCellValueFactory(f -> new javafx.beans.property.ReadOnlyStringWrapper(f.getValue().getExamDate()));
         dateCol.setPrefWidth(120);
 
         TableColumn<AllocationResult, String> timeCol = new TableColumn<>("Time");
-        timeCol.setCellValueFactory(new PropertyValueFactory<>("time"));
+        timeCol.setCellValueFactory(f -> new javafx.beans.property.ReadOnlyStringWrapper(f.getValue().getTime()));
         timeCol.setPrefWidth(120);
 
-        TableColumn<AllocationResult, String> semCol = new TableColumn<>("Sem");
-        semCol.setCellValueFactory(new PropertyValueFactory<>("semester"));
-        semCol.setPrefWidth(60);
+        TableColumn<AllocationResult, String> semCol = new TableColumn<>("Semester");
+        semCol.setCellValueFactory(f -> new javafx.beans.property.ReadOnlyStringWrapper(f.getValue().getSemester()));
+        semCol.setPrefWidth(80);
 
-        TableColumn<AllocationResult, String> subjectCol = new TableColumn<>("Subject");
-        subjectCol.setCellValueFactory(new PropertyValueFactory<>("subject"));
-        subjectCol.setPrefWidth(350);
+        TableColumn<AllocationResult, String> subCol = new TableColumn<>("Subject");
+        subCol.setCellValueFactory(f -> new javafx.beans.property.ReadOnlyStringWrapper(f.getValue().getSubject()));
+        subCol.setPrefWidth(250);
 
-        TableColumn<AllocationResult, Integer> roomCol = new TableColumn<>("Room");
-        roomCol.setCellValueFactory(new PropertyValueFactory<>("roomNo"));
-        roomCol.setPrefWidth(80);
+        TableColumn<AllocationResult, String> facCol = new TableColumn<>("Faculty");
+        facCol.setCellValueFactory(f -> new javafx.beans.property.ReadOnlyStringWrapper(f.getValue().getFacultyName()));
+        facCol.setPrefWidth(200);
 
-        tableView.getColumns().addAll(dateCol, timeCol, semCol, subjectCol, roomCol);
-    }
+        table.getColumns().addAll(roomCol, dateCol, timeCol, semCol, subCol, facCol);
+        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
 
-    private void loadFaculties() {
-        List<Faculty> faculties = facultyDAO.getAllFaculties();
-        facultyComboBox.setItems(FXCollections.observableArrayList(faculties));
-    }
+        // ===== Button =====
+        Button showBtn = new Button("Show Allocation");
+        showBtn.setStyle("-fx-font-size: 14px; -fx-padding: 5px 15px;");
+        showBtn.setOnAction(e -> {
+            Faculty selected = facultyCombo.getSelectionModel().getSelectedItem();
+            if (selected != null) {
+                List<AllocationResult> allocations = allocationDAO.getAllocationsForFaculty(selected.getName());
 
-    private void showSelectedFacultyAllocations() {
-        Faculty selectedFaculty = facultyComboBox.getValue();
-        if (selectedFaculty == null) {
-            showAlert("Please select a faculty first!");
-            return;
-        }
+                // Deduplicate based on room+date+time+subject
+                Set<String> seen = new HashSet<>();
+                List<AllocationResult> uniqueList = new ArrayList<>();
+                for (AllocationResult ar : allocations) {
+                    String key = ar.getRoomNo() + "|" + ar.getExamDate() + "|" + ar.getTime() + "|" + ar.getSubject();
+                    if (!seen.contains(key)) {
+                        uniqueList.add(ar);
+                        seen.add(key);
+                    }
+                }
 
-        List<AllocationResult> allocations = allocationDAO.getAllocationsForFaculty(selectedFaculty.getName());
-        tableView.setItems(FXCollections.observableArrayList(allocations));
+                // Find conflicts: same time but different subjects
+                Set<String> conflictKeys = new HashSet<>();
+                Map<String, List<AllocationResult>> timeMap = new HashMap<>();
+                for (AllocationResult ar : uniqueList) {
+                    String key = ar.getExamDate() + "|" + ar.getTime();
+                    timeMap.computeIfAbsent(key, k -> new ArrayList<>()).add(ar);
+                }
+                for (Map.Entry<String, List<AllocationResult>> entry : timeMap.entrySet()) {
+                    if (entry.getValue().size() > 1) {
+                        conflictKeys.add(entry.getKey());
+                    }
+                }
 
-        if (allocations.isEmpty()) {
-            showAlert("No allocations found for " + selectedFaculty.getName());
-        }
-    }
+                // Row factory for conflict highlighting
+                table.setRowFactory(tv -> new TableRow<>() {
+                    @Override
+                    protected void updateItem(AllocationResult item, boolean empty) {
+                        super.updateItem(item, empty);
+                        if (item == null || empty) {
+                            setStyle("");
+                        } else {
+                            String key = item.getExamDate() + "|" + item.getTime();
+                            if (conflictKeys.contains(key)) {
+                                setStyle("-fx-background-color: #ffcccc;"); // red highlight
+                            } else {
+                                setStyle("");
+                            }
+                        }
+                    }
+                });
 
-    private void showAlert(String message) {
-        Alert alert = new Alert(Alert.AlertType.INFORMATION);
-        alert.setTitle("Info");
-        alert.setHeaderText(null);
-        alert.setContentText(message);
-        alert.showAndWait();
+                table.setItems(FXCollections.observableArrayList(uniqueList));
+            } else {
+                Alert alert = new Alert(Alert.AlertType.WARNING, "Please select a faculty first.");
+                alert.showAndWait();
+            }
+        });
+
+        VBox root = new VBox(15, label, facultyCombo, showBtn, table);
+        root.setPadding(new javafx.geometry.Insets(15));
+        root.setStyle("-fx-background-color: #f0f8ff;");
+
+        Scene scene = new Scene(root, 950, 550);
+        stage.setScene(scene);
+        stage.setTitle("Faculty Allocation Page");
+        stage.show();
     }
 
     public static void main(String[] args) {

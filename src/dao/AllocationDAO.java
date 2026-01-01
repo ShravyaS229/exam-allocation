@@ -1,62 +1,61 @@
 package src.dao;
 
-import src.models.AllocationResult;
 import src.DBConnection;
+import src.models.AllocationResult;
+
 import java.sql.*;
 import java.util.*;
 
 public class AllocationDAO {
-    public List<AllocationResult> getAllocationsForFaculty(String facultyName) {
-        List<AllocationResult> results = new ArrayList<>();
-        String query = "SELECT * FROM allocation_result WHERE faculty_name LIKE ? ORDER BY exam_date, time";
-        
-        try (Connection conn = DBConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(query)) {
-            ps.setString(1, "%" + facultyName.trim() + "%");
+
+    public void saveAllocation(AllocationResult ar) {
+        String sql = """
+            INSERT INTO allocation_result
+            (exam_date,time,room_no,semester,subject,faculty_name,designation)
+            VALUES (?,?,?,?,?,?,?)
+        """;
+
+        try (Connection c = DBConnection.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+
+            ps.setString(1, ar.getExamDate());
+            ps.setString(2, ar.getTime());
+            ps.setInt(3, ar.getRoomNo());
+            ps.setString(4, ar.getSemester());
+            ps.setString(5, ar.getSubject());
+            ps.setString(6, ar.getFacultyName());
+            ps.setString(7, ar.getDesignation());
+            ps.executeUpdate();
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public List<AllocationResult> getAllocationsForFaculty(String name) {
+        List<AllocationResult> list = new ArrayList<>();
+        String sql = "SELECT * FROM allocation_result WHERE faculty_name=?";
+
+        try (Connection c = DBConnection.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+
+            ps.setString(1, name);
             ResultSet rs = ps.executeQuery();
-            
+
             while (rs.next()) {
-                results.add(new AllocationResult(
-                    rs.getString("exam_date"),
-                    rs.getString("time"),
-                    rs.getInt("room_no"),
-                    rs.getString("semester"),
-                    rs.getString("subject"),
-                    rs.getString("faculty_name")
+                list.add(new AllocationResult(
+                        rs.getDate("exam_date").toString(),
+                        rs.getString("time"),
+                        rs.getInt("room_no"),
+                        rs.getString("semester"),
+                        rs.getString("subject"),
+                        rs.getString("faculty_name"),
+                        rs.getString("designation")
                 ));
             }
-        } catch (SQLException e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
-        return results;
-    }
-    
-    public void clearAllAllocations() {
-        try (Connection conn = DBConnection.getConnection();
-             Statement stmt = conn.createStatement()) {
-            stmt.executeUpdate("DELETE FROM allocation_result");
-            System.out.println("Cleared all allocations");
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-    }
-    
-    // FIXED: String date parameter for AllocationLogic compatibility
-    public void saveAllocation(String examDateStr, String time, int roomNo, String semester, 
-                              String subject, String facultyName, String designation) {
-        String sql = "INSERT INTO allocation_result (exam_date, time, room_no, semester, subject, faculty_name, designation) VALUES (?, ?, ?, ?, ?, ?, ?)";
-        try (Connection conn = DBConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, examDateStr);  // String date from Slot model
-            ps.setString(2, time);
-            ps.setInt(3, roomNo);
-            ps.setString(4, semester);
-            ps.setString(5, subject);
-            ps.setString(6, facultyName);
-            ps.setString(7, designation);
-            ps.executeUpdate();
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
+        return list;
     }
 }

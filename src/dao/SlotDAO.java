@@ -1,51 +1,62 @@
 package src.dao;
+
+import src.DBConnection;
 import src.models.Slot;
-import java.sql.*;
-import java.util.*;
-import src.DBConnection; 
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.util.ArrayList;
+import java.util.List;
 
 public class SlotDAO {
+
+    // Existing method (UNCHANGED)
+    public List<Slot> getAllSlots() {
+        List<Slot> list = new ArrayList<>();
+        String sql = "SELECT * FROM slots ORDER BY exam_date, time";
+
+        try (Connection c = DBConnection.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+
+            while (rs.next()) {
+                list.add(new Slot(
+                        rs.getDate("exam_date").toString(),
+                        rs.getString("semester"),
+                        rs.getString("subject_code"),
+                        rs.getString("time")
+                ));
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return list;
+    }
+
+    // ✅ REQUIRED by AllocationLogic
     public List<Slot> getSlotsBySemester(String semester) {
-        List<Slot> slots = new ArrayList<>();
-        String query = "SELECT slot_id, exam_date, semester, subject_code, time FROM slots WHERE semester = ? ORDER BY exam_date, time";
-        try (Connection conn = DBConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(query)) {
+        List<Slot> list = new ArrayList<>();
+        String sql = "SELECT * FROM slots WHERE semester = ? ORDER BY exam_date, time";
+
+        try (Connection c = DBConnection.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+
             ps.setString(1, semester);
             ResultSet rs = ps.executeQuery();
+
             while (rs.next()) {
-                slots.add(new Slot(
-                    rs.getInt("slot_id"),
-                    rs.getString("exam_date"),
-                    rs.getString("semester"),
-                    rs.getString("subject_code"),
-                    rs.getString("time")
+                list.add(new Slot(
+                        rs.getDate("exam_date").toString(),
+                        rs.getString("semester"),
+                        rs.getString("subject_code"),
+                        rs.getString("time")
                 ));
             }
-        } catch (SQLException e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
-        return slots;
-    }
-    
-    // ADD THIS METHOD - FIXES "getAllSlots() undefined"
-    public List<Slot> getAllSlots() {
-        List<Slot> slots = new ArrayList<>();
-        String query = "SELECT slot_id, exam_date, semester, subject_code, time FROM slots ORDER BY exam_date, time";
-        try (Connection conn = DBConnection.getConnection();
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(query)) {
-            while (rs.next()) {
-                slots.add(new Slot(
-                    rs.getInt("slot_id"),
-                    rs.getString("exam_date"),
-                    rs.getString("semester"),
-                    rs.getString("subject_code"),
-                    rs.getString("time")
-                ));
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-        return slots;
+
+        return list;
     }
 }
